@@ -1,49 +1,182 @@
-# Lab 06: Breadth-First Search
+# Lab 6: Breadth-First Search
 
-## Overview
-In this lab, you will implement **Breadth-First Search (BFS)** from Chapter 6 of "Grokking Algorithms." BFS is used to find the shortest path in unweighted graphs.
+## 1. Introduction and Objectives
 
-## Learning Objectives
-- Understand graph representation using adjacency lists
-- Implement BFS using a queue
-- Find shortest paths in unweighted graphs
-- Avoid infinite loops by tracking visited nodes
+### Overview
+Implement breadth-first search (BFS) to find shortest paths in graphs. Build a road network connecting Texas cities.
 
-## Background
+### Learning Objectives
+- Understand graph data structures
+- Implement BFS algorithm
+- Find shortest path (fewest edges)
+- Use queues for level-order traversal
 
-### Graphs
-A graph consists of:
-- **Nodes** (vertices): The entities
-- **Edges**: Connections between nodes
-
-Graphs can be:
-- **Directed**: Edges have direction (A → B doesn't mean B → A)
-- **Undirected**: Edges go both ways
-
-### BFS Algorithm
-BFS explores nodes level by level:
-1. Start at the source node
-2. Visit all neighbors (distance 1)
-3. Then visit neighbors of neighbors (distance 2)
-4. Continue until target found or all nodes visited
-
-**Key insight**: BFS finds the shortest path because it explores closer nodes first!
-
-### Queue (FIFO)
-BFS uses a queue (First In, First Out):
-- Add new nodes to the back
-- Process nodes from the front
-- This ensures we check closer nodes before farther ones
+### Prerequisites
+- Complete Labs 1-5
+- Read Chapter 6 in "Grokking Algorithms" (pages 101-120)
 
 ---
 
-## Complete Solutions
+## 2. Algorithm Background
 
-### Task 1: `search()` - Complete Implementation
+### Graphs
+- **Nodes/Vertices**: Things (cities)
+- **Edges**: Connections (roads)
+- **Directed vs Undirected**
+
+### BFS Properties
+- Explores level by level
+- Uses a **queue** (FIFO)
+- Finds shortest path by edges
+- Time: O(V + E) where V=vertices, E=edges
+
+---
+
+## 3. Project Structure
+
+```
+lab06_bfs/
+├── graph.py       # Graph implementation
+├── bfs.py         # BFS algorithm
+├── main.py        # Main program
+└── README.md      # Your lab report
+```
+
+---
+
+## 4. Step-by-Step Implementation
+
+### Step 1: Create `graph.py`
 
 ```python
-from collections import deque
+"""
+Lab 6: Graph Implementation
+Adjacency list representation for city road network.
+"""
+from typing import Dict, List, Set
+from collections import defaultdict
 
+
+class Graph:
+    """
+    Undirected graph using adjacency list.
+    
+    Adjacency list: Each node stores list of neighbors
+    - Space efficient for sparse graphs
+    - O(1) to add edge
+    - O(degree) to check if edge exists
+    """
+    
+    def __init__(self):
+        # defaultdict creates empty list for new keys
+        self.adjacency_list: Dict[str, List[str]] = defaultdict(list)
+        self.vertices: Set[str] = set()
+    
+    def add_vertex(self, vertex: str) -> None:
+        """Add a vertex to the graph."""
+        self.vertices.add(vertex)
+    
+    def add_edge(self, v1: str, v2: str) -> None:
+        """
+        Add undirected edge between v1 and v2.
+        For directed graph, only add v1 -> v2.
+        """
+        self.vertices.add(v1)
+        self.vertices.add(v2)
+        
+        # Undirected: add both directions
+        if v2 not in self.adjacency_list[v1]:
+            self.adjacency_list[v1].append(v2)
+        if v1 not in self.adjacency_list[v2]:
+            self.adjacency_list[v2].append(v1)
+    
+    def get_neighbors(self, vertex: str) -> List[str]:
+        """Get all neighbors of a vertex."""
+        return self.adjacency_list[vertex]
+    
+    def has_edge(self, v1: str, v2: str) -> bool:
+        """Check if edge exists between v1 and v2."""
+        return v2 in self.adjacency_list[v1]
+    
+    def display(self) -> None:
+        """Display the graph structure."""
+        print("\nGraph Adjacency List:")
+        print("-" * 40)
+        for vertex in sorted(self.vertices):
+            neighbors = self.adjacency_list[vertex]
+            print(f"{vertex}: {neighbors}")
+    
+    def __len__(self) -> int:
+        return len(self.vertices)
+
+
+def create_texas_road_network() -> Graph:
+    """
+    Create a simplified Texas highway network.
+    Edges represent direct highway connections.
+    """
+    g = Graph()
+    
+    # Major highway connections (simplified)
+    roads = [
+        # I-45 corridor
+        ("Houston", "Dallas"),
+        
+        # I-35 corridor  
+        ("Dallas", "Austin"),
+        ("Austin", "San Antonio"),
+        ("San Antonio", "Laredo"),
+        
+        # I-10 corridor
+        ("Houston", "San Antonio"),
+        ("San Antonio", "El Paso"),
+        
+        # I-20 corridor
+        ("Dallas", "Fort Worth"),
+        ("Fort Worth", "Lubbock"),
+        ("Lubbock", "El Paso"),
+        
+        # Other connections
+        ("Dallas", "Arlington"),
+        ("Fort Worth", "Arlington"),
+        ("Houston", "Corpus Christi"),
+        ("Corpus Christi", "San Antonio"),
+        ("Austin", "Killeen"),
+        ("Dallas", "Plano"),
+        ("Dallas", "Irving"),
+        ("Dallas", "Garland"),
+        ("Plano", "Frisco"),
+        ("Plano", "McKinney"),
+        ("Corpus Christi", "Brownsville"),
+        ("Brownsville", "McAllen"),
+        ("McAllen", "Laredo"),
+    ]
+    
+    for city1, city2 in roads:
+        g.add_edge(city1, city2)
+    
+    return g
+```
+
+### Step 2: Create `bfs.py`
+
+```python
+"""
+Lab 6: Breadth-First Search Implementation
+Finds shortest path (by number of edges) in unweighted graph.
+
+From Chapter 6: BFS answers two questions:
+1. Is there a path from A to B?
+2. What is the shortest path from A to B?
+"""
+from typing import List, Dict, Optional, Callable
+from collections import deque
+from graph import Graph
+
+
+# ============================================
+# MANGO SELLER EXAMPLE FROM CHAPTER 6
+# ============================================
 def person_is_seller(name: str) -> bool:
     """
     Check if person is a mango seller.
@@ -52,165 +185,275 @@ def person_is_seller(name: str) -> bool:
     return name[-1] == 'm'
 
 
-def search(graph: Dict[str, List[str]], start: str) -> Optional[str]:
+def search_for_seller(graph: dict, start: str) -> Optional[str]:
     """
     Search for a mango seller using BFS.
     
     From Chapter 6 (page 114):
     - Use a queue to search in order
     - Mark people as searched to avoid infinite loops
-    
-    Args:
-        graph: Adjacency list {person: [friends]}
-        start: Starting person
-    
-    Returns:
-        Name of mango seller if found, None otherwise
+    - First-degree connections searched before second-degree
     """
-    # Create a queue with the start node's neighbors
-    search_queue = deque(graph[start])
-    
-    # Track who we've already searched (to avoid infinite loops)
-    searched = set()
+    search_queue = deque()
+    search_queue += graph[start]
+    searched = set()  # Track who we've already searched
     
     while search_queue:
-        # Pop the first person from the queue
         person = search_queue.popleft()
         
-        # Only search if we haven't already
         if person not in searched:
-            # Check if they're a mango seller
             if person_is_seller(person):
+                print(f"{person} is a mango seller!")
                 return person
             else:
-                # Not a seller - add their friends to the queue
-                search_queue.extend(graph.get(person, []))
-                # Mark this person as searched
+                search_queue += graph.get(person, [])
                 searched.add(person)
     
-    # No mango seller found
+    print("No mango seller found!")
     return None
-```
 
-**How it works:**
-1. Create a queue initialized with the start node's neighbors
-2. Create an empty set to track searched nodes
-3. While the queue is not empty:
-   - Pop the first person from the front (`popleft()`)
-   - If we haven't searched them yet:
-     - Check if they're a mango seller (name ends with 'm')
-     - If yes: return their name
-     - If no: add their friends to the queue and mark them as searched
-4. If queue empties without finding a seller, return `None`
 
----
-
-### Task 2: `bfs_shortest_path()` - Complete Implementation
-
-```python
-def bfs_shortest_path(graph: Dict[str, List[str]], start: str, end: str) -> Optional[List[str]]:
+def bfs_find_path(graph: Graph, start: str, end: str) -> Optional[List[str]]:
     """
     Find shortest path from start to end using BFS.
     
-    Args:
-        graph: Adjacency list
-        start: Starting node
-        end: Target node
+    Time Complexity: O(V + E)
+    Space Complexity: O(V)
     
     Returns:
-        List of nodes in path, or None if no path exists
+        List of vertices forming the path, or None if no path exists
     """
-    # Edge case: start is the end
-    if start == end:
-        return [start]
+    if start not in graph.vertices or end not in graph.vertices:
+        print(f"Error: '{start}' or '{end}' not in graph")
+        return None
     
-    # Queue stores (current_node, path_to_current_node)
-    search_queue = deque([(start, [start])])
+    # Queue stores (current_vertex, path_to_current)
+    queue = deque([(start, [start])])
     
-    # Track visited nodes
-    visited = set([start])
+    # Track visited vertices to avoid cycles
+    visited = {start}
     
-    while search_queue:
-        # Pop the first item from the queue
-        current_node, path = search_queue.popleft()
+    print(f"\nBFS from '{start}' to '{end}':")
+    print("-" * 40)
+    
+    level = 0
+    nodes_at_level = 1
+    next_level_nodes = 0
+    
+    while queue:
+        current, path = queue.popleft()
+        nodes_at_level -= 1
         
-        # Check all neighbors
-        for neighbor in graph.get(current_node, []):
+        print(f"Level {level}: Visiting '{current}'")
+        
+        # Found the destination!
+        if current == end:
+            print(f"\nFound path with {len(path) - 1} edges!")
+            return path
+        
+        # Explore neighbors
+        for neighbor in graph.get_neighbors(current):
             if neighbor not in visited:
-                # Build the new path
-                new_path = path + [neighbor]
-                
-                # Check if we've reached the end
-                if neighbor == end:
-                    return new_path
-                
-                # Mark as visited and add to queue
                 visited.add(neighbor)
-                search_queue.append((neighbor, new_path))
+                new_path = path + [neighbor]
+                queue.append((neighbor, new_path))
+                next_level_nodes += 1
+        
+        # Track levels for visualization
+        if nodes_at_level == 0:
+            level += 1
+            nodes_at_level = next_level_nodes
+            next_level_nodes = 0
     
-    # No path found
+    print(f"\nNo path found from '{start}' to '{end}'")
     return None
+
+
+def bfs_all_reachable(graph: Graph, start: str) -> Dict[str, int]:
+    """
+    Find all vertices reachable from start and their distances.
+    
+    Returns:
+        Dict mapping vertex -> distance from start
+    """
+    if start not in graph.vertices:
+        return {}
+    
+    distances = {start: 0}
+    queue = deque([start])
+    
+    while queue:
+        current = queue.popleft()
+        current_dist = distances[current]
+        
+        for neighbor in graph.get_neighbors(current):
+            if neighbor not in distances:
+                distances[neighbor] = current_dist + 1
+                queue.append(neighbor)
+    
+    return distances
+
+
+def bfs_is_connected(graph: Graph, v1: str, v2: str) -> bool:
+    """Check if path exists between two vertices."""
+    path = bfs_find_path(graph, v1, v2)
+    return path is not None
 ```
 
-**How it works:**
-1. Handle edge case: if start equals end, return `[start]`
-2. Create a queue of `(node, path_to_node)` tuples, starting with `(start, [start])`
-3. Create a visited set initialized with the start node
-4. While the queue is not empty:
-   - Pop the first `(current_node, path)` from the queue
-   - For each neighbor of the current node:
-     - If not visited:
-       - Build the new path: `path + [neighbor]`
-       - If neighbor is the end: return the new path (shortest path found!)
-       - Otherwise: mark as visited and add `(neighbor, new_path)` to queue
-5. If queue empties without finding end, return `None`
-
----
-
-## Example Usage
+### Step 3: Create `main.py`
 
 ```python
-graph = {
-    "you": ["alice", "bob", "claire"],
-    "bob": ["anuj", "peggy"],
-    "alice": ["peggy"],
-    "claire": ["thom", "jonny"],
-    "anuj": [],
-    "peggy": [],
-    "thom": [],
-    "jonny": []
-}
+"""
+Lab 6: Main Program
+Demonstrates BFS on Texas road network.
+"""
+from graph import Graph, create_texas_road_network
+from bfs import bfs_find_path, bfs_all_reachable
 
-# Search for mango seller
->>> search(graph, "you")
-'thom'  # thom ends with 'm'
 
-# BFS explores in this order:
-# Level 0: you
-# Level 1: alice, bob, claire
-# Level 2: peggy, anuj, peggy, thom, jonny
-# 'thom' ends with 'm' - found!
+def main():
+    # =========================================
+    # PART 1: Mango Seller Example (from Chapter 6)
+    # =========================================
+    print("=" * 60)
+    print("PART 1: MANGO SELLER SEARCH (Chapter 6)")
+    print("=" * 60)
+    
+    from bfs import search_for_seller
+    
+    # Graph from Chapter 6 - your friends network
+    graph = {
+        "you": ["alice", "bob", "claire"],
+        "bob": ["anuj", "peggy"],
+        "alice": ["peggy"],
+        "claire": ["thom", "jonny"],
+        "anuj": [],
+        "peggy": [],
+        "thom": [],
+        "jonny": []
+    }
+    
+    print("\nFriends network:")
+    for person, friends in graph.items():
+        print(f"  {person} → {friends}")
+    
+    print("\nSearching for mango seller (name ends with 'm')...")
+    search_for_seller(graph, "you")
+    
+    # =========================================
+    # PART 2: Create Road Network
+    # =========================================
+    print("\n" + "=" * 60)
+    print("PART 2: TEXAS ROAD NETWORK GRAPH")
+    print("=" * 60)
+    
+    roads = create_texas_road_network()
+    print(f"\nCreated graph with {len(roads)} cities")
+    roads.display()
+    
+    # =========================================
+    # PART 2: Find Shortest Paths
+    # =========================================
+    print("\n" + "=" * 60)
+    print("PART 2: SHORTEST PATH (BFS)")
+    print("=" * 60)
+    
+    # Houston to El Paso
+    path = bfs_find_path(roads, "Houston", "El Paso")
+    if path:
+        print(f"\nRoute: {' → '.join(path)}")
+    
+    # Houston to McKinney
+    print("\n" + "-" * 40)
+    path = bfs_find_path(roads, "Houston", "McKinney")
+    if path:
+        print(f"\nRoute: {' → '.join(path)}")
+    
+    # =========================================
+    # PART 3: Reachability
+    # =========================================
+    print("\n" + "=" * 60)
+    print("PART 3: DISTANCES FROM HOUSTON")
+    print("=" * 60)
+    
+    distances = bfs_all_reachable(roads, "Houston")
+    
+    print("\nCities by distance (edges) from Houston:")
+    for dist in range(max(distances.values()) + 1):
+        cities_at_dist = [c for c, d in distances.items() if d == dist]
+        if cities_at_dist:
+            print(f"  {dist} edge(s): {', '.join(sorted(cities_at_dist))}")
+    
+    # =========================================
+    # PART 4: Key Concepts
+    # =========================================
+    print("\n" + "=" * 60)
+    print("PART 4: BFS KEY CONCEPTS")
+    print("=" * 60)
+    print("""
+    Why BFS finds shortest path:
+    1. Explores ALL nodes at distance 1 first
+    2. Then ALL nodes at distance 2
+    3. And so on...
+    
+    First time we reach destination = shortest path!
+    
+    BFS uses a QUEUE (FIFO):
+    - First In, First Out
+    - Process nodes in order they were discovered
+    
+    Time Complexity: O(V + E)
+    - Visit each vertex once: O(V)
+    - Check each edge once: O(E)
+    
+    Note: BFS finds shortest path by NUMBER OF EDGES.
+    For weighted graphs (actual distances), use Dijkstra's (Lab 9)!
+    """)
 
-# Shortest path
->>> bfs_shortest_path(graph, "you", "thom")
-['you', 'claire', 'thom']
 
->>> bfs_shortest_path(graph, "you", "anuj")
-['you', 'bob', 'anuj']
-
->>> bfs_shortest_path(graph, "you", "you")
-['you']
-
->>> bfs_shortest_path(graph, "you", "nonexistent")
-None
+if __name__ == "__main__":
+    main()
 ```
 
 ---
 
-## Testing
-```bash
-python -m pytest tests/ -v
+## 5. Lab Report Template
+
+```markdown
+# Lab 6: Breadth-First Search
+
+## Student Information
+- **Name:** [Your Name]
+- **Date:** [Date]
+
+## Graph Concepts
+
+### Adjacency List Representation
+[Explain how the graph is stored]
+
+### BFS Algorithm Steps
+1. [Step 1]
+2. [Step 2]
+3. [Continue...]
+
+## Test Results
+
+| Start | End | Path | Edges |
+|-------|-----|------|-------|
+| Houston | El Paso | | |
+| Houston | McKinney | | |
+| Dallas | Laredo | | |
+
+## Reflection Questions
+
+1. Why does BFS use a queue instead of a stack?
+
+2. What's the difference between BFS shortest path and actual shortest distance?
+
+3. When would you use BFS vs DFS?
 ```
 
-## Submission
-Commit and push your completed `bfs.py` file.
+---
+
+## 6. Submission
+Save files in `lab06_bfs/`, complete README, commit and push.
